@@ -29,6 +29,9 @@
 #include <CGAL/assertions.h>
 #include <CGAL/Surface_mesh.h>
 #include <CGAL/lloyd_optimize_mesh_2.h>
+#include "csv_parser.h"
+#include <CGAL/compute_average_spacing.h>
+#include <CGAL/remove_outliers.h>
 
 # define M_PI  3.14159265358979323846 
 namespace fs = std::filesystem;
@@ -80,6 +83,7 @@ namespace PS = CGAL::Polyline_simplification_2;
 
 typedef PS::Stop_below_count_ratio_threshold Stop;
 typedef PS::Squared_distance_cost            Cost;
+typedef CGAL::Parallel_if_available_tag Concurrency_tag;
 
 
 
@@ -108,7 +112,9 @@ public:
 	InputData data;
 	void init();
 	void startReconstruction();
+	void analyzeLandmarks();
 	int current_frame = 0;
+
 	int total_frame = 0;
 private:
 	
@@ -116,6 +122,8 @@ private:
 	void findRoadContours();
 	void buildPointCloudfromDepth();
 	void buildPlanePointCloud();
+
+	void buildPointCloud();
 
 	std::pair<float, float> projectToUV(float x, float y, float z);
 
@@ -130,4 +138,10 @@ private:
 	Polygon_2 testpolyon;
 	Mesh m;
 	CDT dt;
+	vector<Slam_data> slam_data;
+	vector<Landmark_data> landmarks_data;
+
+	std::vector<Point_3> testPoints;
+	Plane testplane;
+	int fps = 24;
 };

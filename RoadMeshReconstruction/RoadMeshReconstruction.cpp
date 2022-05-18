@@ -21,6 +21,27 @@ void RoadMeshReconstruction::init() {
 
 	output_dir = cv::utils::fs::join(outputDir, "case2_mesh");
 	cv::utils::fs::createDirectory(output_dir);
+
+	string slam_path = input_dir + "/openslam.csv";
+	string landmarks_path = input_dir + "/landmarks.csv";
+	string file_contents;
+	std::map<int, std::vector<string>> csv_contents;
+	char delimiter = ',';
+
+	CSV_parser csv_parser(slam_path,landmarks_path);
+
+	slam_data = csv_parser.get_slamdata();
+	landmarks_data = csv_parser.get_landmarksdata();
+
+
+
+	//for (int i = 0; i < slam_data.size(); i++) {
+	//	cout << "id: " << i << endl;
+	//	cout << "position :" << slam_data[i].position.x << " " << slam_data[i].position.y << " " << slam_data[i].position.z << endl;
+	//	cout << "quarternion :" << slam_data[i].quaternion.x << " " << slam_data[i].quaternion.y << " " << slam_data[i].quaternion.z <<" "<< slam_data[i].quaternion.w << endl;
+	//	cout << "timestamp :" << slam_data[i].timestamp << endl;
+	//}
+
 }
 
 void RoadMeshReconstruction::readData() {
@@ -308,7 +329,7 @@ void RoadMeshReconstruction::buildPlanePointCloud() {
 	}
 	cout << "simplify" << endl;
 	Cost cost;
-	polygon = PS::simplify(polygon, cost, Stop(0.05));
+	polygon = PS::simplify(polygon, cost, Stop(0.03));
 	cout << "simplify" << endl;
 	testpolyon = polygon;
 	dt.insert_constraint(polygon.vertices_begin(), polygon.vertices_end(), true);
@@ -638,6 +659,584 @@ void RoadMeshReconstruction::outputOBJ() {
 
 	
 
+}
+
+void RoadMeshReconstruction::analyzeLandmarks() {
+
+	//myfile.open("test.obj");
+	std::map<int, int> keyframe_map;
+	for (int i = 0; i < slam_data.size(); i++) {
+		int keyframe = slam_data[i].key_frame_id;
+		keyframe_map[keyframe] = i;
+
+	}
+	// Loop over vertices
+	int currentid = -1;
+
+	cv::Mat seg_img;
+	cv::Mat road;
+	cv::Mat roadline;
+	cv::Mat rgb;
+	ofstream myfile;
+	myfile.open("testoutput.obj");
+	for (int i = 0; i < landmarks_data.size(); i++) {
+		float x = landmarks_data[i].position.x;
+		float y = landmarks_data[i].position.y;
+		float z = landmarks_data[i].position.z;
+
+		auto iter = keyframe_map.find(landmarks_data[i].ref_keyframe);
+
+		if (y >= -0.5 && y < 0.5) {
+			testPoints.push_back(Point_3(x, z, -y));
+		}
+
+	}
+	// Loop over vertices
+
+	Point_3 centeroid;
+	linear_least_squares_fitting_3(testPoints.begin(), testPoints.end(), testplane, centeroid, CGAL::Dimension_tag<0>());
+	cout << "plane :" << testplane.a() <<" "<< testplane.b() << " " << testplane.c() << " " << testplane.d();
+
+	for (int i = 0; i < testPoints.size();i++) {
+		Point_3 pt = testPoints[i];
+
+		myfile << "v " << pt << "\n";
+	}
+	myfile.close();
+
+	ofstream myfile2;
+	myfile2.open("testplane.obj");
+	for (int x = 0; x < 100; x++) {
+		for (int y = 0; y < 100; y++) {
+
+			int min = -4;
+			int max = 4;
+
+			float idx = ((float)x / 100)*(max - min)+min;
+			float idy = ((float)y / 100)*(max - min)+min;
+
+			//ax+by+cz+d=0;
+			float a = testplane.a();
+			float b = testplane.b();
+			float c = testplane.c();
+			float d = testplane.d();
+			float z = (-d - a * idx - b * idy) / c;
+			myfile2 << "v " << idx<<" "<<idy<<" "<<z << "\n";
+		}
+	}
+	myfile2.close();
+
+		//if (iter != keyframe_map.end()) {
+		//	Slam_data slamdata = slam_data[iter->second];
+		//	int frame = round(slamdata.timestamp * fps);
+
+	
+		//	cout << frame << endl;
+		//	cout << "read Data : " << frame_name[frame] << endl;
+		//	if (currentid != frame) {
+		//		string rgbpath = input_dir + "/rgb/" + frame_name[frame] + ".jpg";
+
+		//		//rgb = cv::imread(rgbpath, CV_LOAD_IMAGE_COLOR);
+		//		
+
+		//		string seg_path = input_dir + "/seg/" + frame_name[frame] + "_prediction.png";
+		//		cout << seg_path << endl;
+		//		seg_img = cv::imread(seg_path, CV_LOAD_IMAGE_COLOR);
+		//		currentid = frame;
+		//		cv::inRange(seg_img, cv::Vec3b(128, 64, 128), cv::Vec3b(128, 64, 128), road);
+		//		cv::inRange(seg_img, cv::Vec3b(255, 255, 255), cv::Vec3b(255, 255, 255), roadline);
+
+		//		roadline.copyTo(road, roadline);
+		//	}
+		//	cout << "here" << endl;
+		//	Eigen::Quaterniond quaternion(slamdata.quaternion.w,slamdata.quaternion.x,slamdata.quaternion.y,slamdata.quaternion.z);
+
+
+		//	float local_x = landmarks_data[i].position.x - slamdata.position.x;
+		//	float local_y = landmarks_data[i].position.y - slamdata.position.y;
+		//	float local_z = landmarks_data[i].position.z - slamdata.position.z;
+		//	Eigen::Vector3d point(local_x, local_y, local_z);
+		//	point = quaternion.inverse() * point;
+
+		//	std::pair<float, float>uv = projectToUV(point.x(), point.z(), point.y());
+
+		//		int u_y = (uv.first - 0.25) / 0.5 * (seg_img.rows);
+		//		int v_x = uv.second * (seg_img.cols);
+
+		//		cout << "here" << endl;
+
+		//		//uchar mask = road.at<uchar>(u_y, v_x);
+		//		cv::Vec3d color;
+		//		cout << uv.first << endl;
+		//		if (uv.first >= 0.25 && uv.first < 0.75) {
+		//			cout << u_y << " " << v_x << endl;
+
+		//			color = seg_img.at<cv::Vec3b>(u_y, v_x);
+		//		}
+		//		else {
+
+		//			color = cv::Vec3b(255,255,255);
+		//		}
+		//		cout << color << endl;
+		//		//if (y>=-2||y<=2)
+		//		myfile << x << " " << y << " " << z << " " << color[2] << " " << color[1] << " " << color[0] << "\n";
+		//
+		//	/*if (mask != 0 ) {
+		//		testPoints.push_back(Point_3(x,y,z));
+		//	}*/
+		//}
+			
+
+		
+		
+
+	//}
+	
+	buildPointCloud();
+
+}
+
+void RoadMeshReconstruction::buildPointCloud() {
+	vector<Point_3> pc;
+	cout << "\npointcloud" << endl;
+
+	float angle=0;
+
+	float pt_minx = FLT_MAX;
+	float pt_maxx = FLT_MIN;
+
+	float pt_miny = FLT_MAX;
+	float pt_maxy = FLT_MIN;
+	ofstream myfile3;
+	myfile3.open("testpc2.ply");
+
+	for (int keyframe = 0; keyframe <slam_data.size(); keyframe++) {
+
+
+		//int keyframe = slam_data[i].key_frame_id;
+
+		if (keyframe > 0) {
+			Eigen::Vector2d v2(0, 1);
+			Eigen::Vector2d v1(slam_data[keyframe].position.x- slam_data[keyframe - 1].position.x , -slam_data[keyframe].position.z-(-slam_data[keyframe-1].position.z));
+			
+
+			
+
+			angle = -atan2(v1.x() * v2.y() - v1.y() * v2.x(), v1.x() * v2.x() + v1.y() * v2.y());
+	
+
+			//angle += atan2(v1.cross(v2).norm(), v1.dot(v2));
+			cout <<"angle :" << angle/M_PI*180 << endl;
+		}
+		cout << keyframe << endl;
+		
+		//double yaw = atan2(2.0 * (q.y * q.z + q.w * q.x), q.w * q.w - q.x * q.x - q.y * q.y + q.z * q.z);
+		//double pitch = asin(-2.0 * (q.x * q.z - q.w * q.y));
+		//double roll = atan2(2.0 * (q.x * q.y + q.w * q.z), q.w * q.w + q.x * q.x - q.y * q.y - q.z * q.z);
+		//cout << "yaw :" << euler[0] / M_PI * 180 << " pitch :" << euler[1] << " roll :" << euler[2] << endl;
+
+
+		cout << slam_data[keyframe].position.x<< endl;
+		int frame = round(slam_data[keyframe].timestamp * fps);
+		cout << frame << endl;
+		string seg_path = input_dir + "/seg/" + frame_name[frame] + "_prediction.png";
+		cv::Mat seg = cv::imread(seg_path, CV_LOAD_IMAGE_COLOR);
+		string rgb_path = input_dir + "/rgb/" + frame_name[frame] + ".jpg";
+		cv::Mat rgb = cv::imread(rgb_path, CV_LOAD_IMAGE_COLOR);
+		cv::Mat road;
+		cv::Mat roadline;
+
+		cv::inRange(seg, cv::Vec3b(128, 64, 128), cv::Vec3b(128, 64, 128), road);
+		cv::inRange(seg, cv::Vec3b(255, 255, 255), cv::Vec3b(255, 255, 255), roadline);
+		roadline.copyTo(road, roadline);
+
+
+		cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(10, 10));
+		cv::dilate(road, road, element);
+		cv::erode(road, road, element);
+
+		vector<vector<cv::Point> > contours;
+		vector<cv::Vec4i> hierarchy;
+
+		cv::findContours(road, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+
+		cv::Mat filled = cv::Mat::zeros(seg.size(), CV_8UC1);
+		int id = 0;
+		float max_area = 0;
+		for (size_t i = 0; i < contours.size(); i++)
+		{
+			float area = contourArea(contours[i], false);
+			if (area > max_area) {
+				id = i;
+				max_area = area;
+
+			}
+		}
+
+		cv::drawContours(filled, contours, id, 255, -1, cv::LINE_8, hierarchy, CV_FILLED);
+	
+
+		int size_n = 100;
+
+
+		for (int idx = 0; idx < size_n; idx++) {
+			for (int idy = 0; idy < size_n; idy++) {
+
+				float max = 1.5;
+				float min = -1.5;
+				float x = (max - min) * idx / (size_n - 1) + min;
+				float y = (max - min) * idy / (size_n - 1) + min;
+
+				float dis = sqrt(x * x + y * y);
+				
+
+				if (dis <= 2.0 && (keyframe==0||y>=0)) {
+
+					float a = testplane.a();
+					float b = testplane.b();
+					float c = testplane.c();
+					float d = testplane.d();
+
+					//float z = -camHeight;
+					float z = (-d - (a * x) - (b * y)) / c;
+					pair<float, float> uv = projectToUV(x, y, z);
+					uv.second += 0.25;
+					if (uv.second > 1) {
+						uv.second -= 1;
+					}
+
+					float scale = 2.0;
+					if (uv.first >= 0.25 && uv.first < 0.75) {
+						int u_y = (uv.first - 0.25) / 0.5 * (filled.rows);
+						int v_x = uv.second * (filled.cols);
+
+						//	test2.at<uchar>(u_y, v_x) = 255;
+
+
+						//	//cv::Vec3b segColor = seg.at<cv::Vec3b>(u_y, v_x);
+
+						if ((int)filled.at<uchar>(u_y, v_x) == 255) {
+							//testPoints.push_back(Point_3(x, z, -y));
+
+							//Eigen::Quaterniond q(slam_data[keyframe].quaternion.w, slam_data[keyframe].quaternion.x, -slam_data[keyframe].quaternion.y, slam_data[keyframe].quaternion.z);
+							//Eigen::Vector3d pt(x, z, -y);
+							//Eigen::Vector3d pntRot =  q*pt;
+
+							float newx = x * cos(angle) - y * sin(angle);
+							float newy = x * sin(angle) + y * cos(angle);
+							float newz = (-d - (a * newx) - (b * newy)) / c;
+					
+							float wx = (newx * scale + slam_data[keyframe].position.x);
+							float wy = (newy * scale + -slam_data[keyframe].position.z) ;
+							float wz = (newz + - slam_data[keyframe].position.y);
+							
+							cv::Vec3b color = rgb.at<cv::Vec3b>((int)(uv.first * rgb.rows), (int)(uv.second * rgb.cols));
+							
+							myfile3 << wx<<" "<<wy<<" "<<wz<< " "<<(int)color[2]<< " "<< (int)color[1]<< " "<< (int)color[0] << "\n";
+
+							if (wx > pt_maxx) {
+								pt_maxx = wx;
+							}
+							if (wx<pt_minx) {
+								pt_minx = wx;
+							}
+							if (wy > pt_maxy) {
+								pt_maxy = wy;
+							}
+							if (wz < pt_miny) {
+								pt_miny = wy;
+							}
+						
+							pc.push_back(Point_3(wx, wy, wz));
+							//pc.push_back(Point_3(wx, wy, z));
+						}
+					}
+					else {
+	
+						float newx = x * cos(angle) - y * sin(angle);
+						float newy = x * sin(angle) + y * cos(angle);
+						float newz = (-d - (a * newx) - (b * newy)) / c;
+
+						float wx = (newx * scale + slam_data[keyframe].position.x) ;
+						float wy = (newy * scale + -slam_data[keyframe].position.z) ;
+						float wz = (newz + -slam_data[keyframe].position.y);
+						pc.push_back(Point_3(wx,wy, wz));
+
+
+						cv::Vec3b color = rgb.at<cv::Vec3b>((int)(uv.first * rgb.rows), (int)(uv.second * rgb.cols));
+
+						myfile3 << wx << " " << wy << " " << wz << " " << (int)color[2] << " " << (int)color[1] << " " << (int)color[0] << "\n";
+
+						if (wx > pt_maxx) {
+							pt_maxx = wx;
+						}
+						if (wx < pt_minx) {
+							pt_minx = wx;
+						}
+						if (wy > pt_maxy) {
+							pt_maxy = wy;
+						}
+						if (wz < pt_miny) {
+							pt_miny = wy;
+						}
+
+					}
+	
+				}
+			}
+		}
+	
+	}
+	myfile3.close();
+	cout << pt_minx << " " << pt_maxx << endl;
+	cout << pt_miny << " " << pt_maxy << endl;
+
+
+	float w = pt_maxx - pt_minx;
+	float h = pt_maxy - pt_miny;
+	cout << w << " " << h << endl;
+
+	
+
+	cv::Mat test = cv::Mat::zeros(cv::Size(w* 15,h* 15), CV_8UC1);
+	
+	cout << test.size() << endl;
+	for (int i = 0; i < pc.size(); i++) {
+		Point_3 pt = pc[i];
+		float u = (pt.hx() - (pt_minx))/(w);
+		float v = (pt.hy() - (pt_miny))/(h);
+
+		if(u>=0&&u<1.0&&v>=0&&v<1.0)
+			test.at<uchar>(v*(h* 15) ,u*(w* 15)) = 255;
+
+	} 
+
+	cv::waitKey(0);
+
+	cout << "contours" << endl;
+	cv::imwrite("before.jpg", test);
+
+	//for (int i = 0; i < 10; i++) {
+	//	cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+	//	cv::dilate(test, test, element);
+
+	//	cv::GaussianBlur(test, test, cv::Size(9, 9), 0);
+	//	cv::erode(test, test, element);
+	//}
+	cv::inRange(test, 100,255, test);
+
+	vector<vector<cv::Point> > contours;
+	vector<cv::Vec4i> hierarchy;
+
+
+	cv::findContours(test, contours, hierarchy, cv::RETR_CCOMP, cv::CHAIN_APPROX_SIMPLE);
+
+	int id = 0;
+	float max_area = 0;
+
+	for (size_t i = 0; i < contours.size(); i++)
+	{
+		float area = contourArea(contours[i], false);
+		
+		if (area > max_area) {
+			id = i;
+			max_area = area;
+
+		}
+	}
+	//cv::Mat smoothCont = cv::Mat::zeros(cv::Size(w * 40, h * 40), CV_8UC1);
+	cv::Mat cnt = cv::Mat::zeros(cv::Size(w * 15, h * 15), CV_8UC1);
+
+	cout << contours[id].size() << endl;
+	cv::Mat drawing = cv::Mat::zeros(cv::Size(w * 15, h * 15), CV_8UC1);; //=
+
+
+
+	//cv::drawContours(drawing, v, 0, cv::Scalar(255, 0, 0), 2, CV_AA);
+
+	//cv::imshow("test2", test2);
+	//cv::imshow("test", data.road_fill);
+	//cv::waitKey(0);
+	vector<vector<cv::Point>> a;
+	vector<cv::Point>  approx1;
+	approx1 = contours[id];
+	//cv::approxPolyDP(contours[id], approx1,2, true);
+
+
+	//for (int i = 1; i < approx1.size(); i++) {
+	//	Eigen::Vector2d v2(approx1[i].x - approx1[i-1].x, approx1[i].y - approx1[i - 1].y);
+	//
+	//	Eigen::Vector2d v1(approx1[(i+1)% approx1.size()].x - approx1[i].x, approx1[(i+1)% approx1.size()].y - approx1[i].y);
+
+	//	angle = atan2(v1.x() * v2.y() - v1.y() * v2.x(), v1.x() * v2.x() + v1.y() * v2.y());
+	//	cout << angle/180*M_PI << endl;
+	//	if (abs(angle) < 30 / 180 * M_PI) {
+
+	//		Eigen::Vector2d v3(approx1[(i + 1) % approx1.size()].x - approx1[i-1].x, approx1[(i + 1) % approx1.size()].y - approx1[i - 1].y);
+	//		float dis2 = sqrt(v3.x() * v3.x() + v3.y() * v3.y());
+	//		float dis1 = sqrt(v2.x() * v2.x() + v2.y() * v2.y());
+
+	//		Eigen::Vector2d v4(v3.x() / dis2*dis1, v3.y() / dis2*dis1);
+	//		approx1[i] = cv::Point(v4.x(), v4.y());
+	//	
+	//	}
+	//	cnt.at<uchar>(approx1[i].y, approx1[i].x) = 255;
+
+	//}
+
+	a.push_back(approx1);
+
+	//cv::drawContours(cnt, a, id, cv::Scalar(255, 0, 0), 2, CV_AA);
+	cv::imwrite("cnt.jpg", cnt);
+	
+	//cv::GaussianBlur(smoothCont, smoothCont, cv::Size(5,5), 0);
+
+	drawContours(drawing, a, 0, (255), 1, cv::LINE_8, hierarchy, 0);
+	cv::imwrite("testimage.jpg", test);
+	cv::imwrite("drawing.jpg", drawing);
+
+
+	cout << "appro" << approx1.size() << endl;
+
+	Polygon_2 polygon;
+	for (int i = 0; i < approx1.size(); i++) {
+		int current_id = i;
+		int next_id = (i + 1) % approx1.size();
+		cv::Point pt = approx1[current_id];
+		cv::Point pt_next = approx1[next_id];
+
+		float x = (pt_maxx - pt_minx) * pt.x  / (w * 15) + pt_minx;
+		float y = (pt_maxy - pt_miny) * pt.y  / (h * 15) + pt_miny;
+
+		float next_x = (pt_maxx - pt_minx) * pt_next.x / (w * 15) + pt_minx;
+		float next_y = (pt_maxy - pt_miny) * pt_next.y / (h * 15) + pt_miny;
+
+		polygon.push_back(Point_2(x, y));
+
+
+	}
+	cout << "simplify" << endl;
+	Cost cost;
+	//polygon = PS::simplify(polygon, cost, Stop(0.3));
+	cout << "simplify" << endl;
+	testpolyon = polygon;
+	dt.insert_constraint(polygon.vertices_begin(), polygon.vertices_end(), true);
+
+	
+	std::list<Point_2> list_of_seeds;
+	list_of_seeds.push_back(Point_2(0, 0));
+
+	std::cout << "Number of vertices: " << dt.number_of_vertices() << std::endl;
+	std::cout << "Number of finite faces: " << dt.number_of_faces() << std::endl;
+	
+	CGAL::refine_Delaunay_mesh_2(dt, list_of_seeds.begin(), list_of_seeds.end(), Criteria(0.0001, 1.0), true);
+
+	std::cout << "Number of vertices: " << dt.number_of_vertices() << std::endl;
+	std::cout << "Number of finite faces: " << dt.number_of_faces() << std::endl;
+
+	int face_count = 0;
+	for (CDT::Finite_faces_iterator fit = dt.finite_faces_begin(); fit != dt.finite_faces_end(); ++fit)
+	{
+		//face_count++;
+		//cout << face_count << endl;
+		if (fit->is_in_domain()) {
+			//cout << "true" <<endl; 
+			//cout << (fit->is_constrained(0)) << " " << (fit->is_constrained(1)) << (fit->is_constrained(2));
+			float a = testplane.a();
+			float b= testplane.b();
+			float c= testplane.c();
+			float d= testplane.d();
+
+			float z1 = (-d - (a * fit->vertex(0)->point().hx()) - (b * fit->vertex(0)->point().hy())) / c;
+			float z2 = (-d - (a * fit->vertex(1)->point().hx()) - (b * fit->vertex(1)->point().hy())) / c;
+			float z3 = (-d - (a * fit->vertex(2)->point().hx()) - (b * fit->vertex(2)->point().hy())) / c;
+
+			Point_3 v1 = Point_3(fit->vertex(0)->point().hx(), fit->vertex(0)->point().hy(), z1);
+			Point_3 v2 = Point_3(fit->vertex(1)->point().hx(), fit->vertex(1)->point().hy(), z2);
+			Point_3 v3 = Point_3(fit->vertex(2)->point().hx(), fit->vertex(2)->point().hy(), z3);
+
+			Mesh::Vertex_index u = m.add_vertex(v1);
+			Mesh::Vertex_index v = m.add_vertex(v2);
+			Mesh::Vertex_index w = m.add_vertex(v3);
+			m.add_face(u, v, w);
+			//dt.delete_face(fit);
+
+			for (int j = 0; j < 3; j++) {
+				if (fit->is_constrained(j)) {
+
+					CDT::Vertex_handle vh1 = fit->vertex((j + 2) % 3);
+					CDT::Vertex_handle vh2 = fit->vertex((j + 1) % 3);
+
+					Point_2 pt1 = vh1->point();
+					Point_2 pt2 = vh2->point();
+
+					float z1 = (-d - (a * pt1.hx()) - (b * pt1.hy())) / c;
+					float z2 = (-d - (a * pt2.hx()) - (b * pt2.hy())) / c;
+
+					Point_3 v1 = Point_3(pt1.hx(), pt1.hy(), z1);
+					Point_3 v2 = Point_3(pt2.hx(), pt2.hy(), z2);
+					Point_3 v3 = Point_3(pt2.hx(), pt2.hy(), z2+ 4);
+				
+
+					Mesh::Vertex_index u = m.add_vertex(v1);
+					Mesh::Vertex_index v = m.add_vertex(v2);
+					Mesh::Vertex_index w = m.add_vertex(v3);
+					m.add_face(u, v, w);
+
+					v1 = Point_3(pt2.hx(), pt2.hy(), z2 + 4);
+					v2 = Point_3(pt1.hx(), pt1.hy(), z1 + 4);
+					v3 = Point_3(pt1.hx(), pt1.hy(), z1);
+
+					u = m.add_vertex(v1);
+					v = m.add_vertex(v2);
+					w = m.add_vertex(v3);
+					m.add_face(u, v, w);
+				}
+			}
+		}
+	}
+
+
+
+	
+
+	cout << "size: " << pc.size() << endl;
+	ofstream myfile;
+	myfile.open("testpc2.obj");
+	std::map<Mesh::Vertex_index, unsigned> vertex_map;
+	unsigned count = 1;
+
+
+	cout << dt.number_of_vertices() << endl;
+
+	// Loop over vertices
+	for (Mesh::Vertex_index vi : m.vertices()) {
+		K::Point_3 pt = m.point(vi);
+		vertex_map[vi] = count;
+		++count;
+		myfile << "v " << pt << "\n";
+	}
+
+	// write vertex
+
+
+
+	myfile << "\n";
+	// Map over facets. Each facet is a cell of the underlying
+	// Delaunay triangulation, and the vertex that is not part of
+	// this facet. We iterate all vertices of the cell except the one
+	// that is opposite.
+	for (Mesh::Face_index face_index : m.faces()) {
+		myfile << "f";
+		Mesh::Halfedge_index hf = m.halfedge(face_index);
+		for (Mesh::Halfedge_index hi : halfedges_around_face(hf, m))
+		{
+			Mesh::Vertex_index vi = target(hi, m);
+			myfile << " " << vertex_map[vi];
+		}
+		myfile << std::endl;
+	}
+	
 }
 
 void RoadMeshReconstruction::startReconstruction() {
