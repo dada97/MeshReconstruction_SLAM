@@ -22,17 +22,17 @@ void CSV_parser::read_slam(string path) {
 		}
 
 		Slam_data data;
-		data.key_frame_id = vect[0];
-		data.position.x = vect[1];
-		data.position.y = vect[2];
-		data.position.z = vect[3];
+		data.key_frame_id = vect[1];
+		data.position.x = vect[2];
+		data.position.y = vect[3];
+		data.position.z = vect[4];
 
-		data.quaternion.x = vect[4];
-		data.quaternion.y = vect[5];
-		data.quaternion.z = vect[6];
-		data.quaternion.w = vect[7];
+		data.quaternion.x = vect[5];
+		data.quaternion.y = vect[6];
+		data.quaternion.z = vect[7];
+		data.quaternion.w = vect[8];
 
-		data.timestamp = vect[8];
+		data.timestamp = vect[9];
 
 		slam_data.push_back(data);
 	}

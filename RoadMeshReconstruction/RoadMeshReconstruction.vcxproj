@@ -149,13 +149,11 @@
     <ClCompile Include="CSV_parser.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="RoadMeshReconstruction.cpp" />
-    <ClCompile Include="Viewer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cnpy.h" />
     <ClInclude Include="csv_parser.h" />
     <ClInclude Include="RoadMeshReconstruction.h" />
-    <ClInclude Include="Viewer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -98,6 +98,7 @@ typedef CGAL::Parallel_if_available_tag Concurrency_tag;
 
 struct InputData {
 	cv::Mat rgb;
+	cv::Mat rgb_ori;
 	cv::Mat seg;
 	cv::Mat seg_ori;
 	cv::Mat road_contour;
@@ -106,6 +107,7 @@ struct InputData {
 	int width;
 	int height;
 };
+
 
 class RoadMeshReconstruction {
 public:
@@ -118,10 +120,13 @@ public:
 	int total_frame = 0;
 private:
 	
-	void readData();
+	void readData(int index);
 	void findRoadContours();
-	void buildPointCloudfromDepth();
+	void calculateCameraHeight();
 	void buildPlanePointCloud();
+	void delaunayTriangulation();
+	void outputDelaunay();
+	std::vector<std::vector<cv::Point>> findPointCloudContours(int min_x,int max_x,int min_y,int max_y);
 
 	void buildPointCloud();
 
@@ -140,8 +145,20 @@ private:
 	CDT dt;
 	vector<Slam_data> slam_data;
 	vector<Landmark_data> landmarks_data;
+	cv::Mat roadMask;
 
 	std::vector<Point_3> testPoints;
+	std::vector<Point_3> pc;
+	int cnt_w;
+	int cnt_h;
 	Plane testplane;
+	Eigen::Quaterniond cur_quat;
 	int fps = 24;
+
+
+	float pt_minx = FLT_MAX;
+	float pt_maxx = FLT_MIN;
+
+	float pt_miny = FLT_MAX;
+	float pt_maxy = FLT_MIN;
 };
