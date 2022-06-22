@@ -18,24 +18,24 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Viewer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="RoadMeshReconstruction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="cnpy.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CSV_parser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Viewer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="RoadMeshReconstruction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="cnpy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="csv_parser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
