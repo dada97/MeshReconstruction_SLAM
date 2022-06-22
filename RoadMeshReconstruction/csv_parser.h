@@ -33,15 +33,15 @@ class CSV_parser {
 
 public:
 	CSV_parser() {};
-	CSV_parser(string slampath,string landmarkspath);
+	CSV_parser(string slampath);
 	vector<Slam_data>  get_slamdata();
 	vector<Landmark_data> get_landmarksdata();
 
 private:
-	void read_slam(string path);
+	void read_slam(string path);		//parse slam data from csv file
 	void read_landmarks(string path);
 
-	vector<Slam_data> slam_data;
+	vector<Slam_data> slam_data;	
 	vector<Landmark_data> landmarks_data;
 
 };

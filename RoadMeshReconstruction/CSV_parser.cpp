@@ -1,9 +1,8 @@
 #include"csv_parser.h"
 
 
-CSV_parser::CSV_parser(string slampath,string landmarkspath) {
+CSV_parser::CSV_parser(string slampath) {
 	read_slam(slampath);
-	read_landmarks(landmarkspath);
 }
 
 void CSV_parser::read_slam(string path) {
@@ -52,7 +51,6 @@ void CSV_parser::read_landmarks(string path) {
 			if (ss.peek() == ',')
 				ss.ignore();
 		}
-
 		Landmark_data data;
 		data.ref_keyframe = vect[6];
 		data.position.x = vect[3];
