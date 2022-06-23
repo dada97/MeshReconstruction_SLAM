@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
 	roadMeshReconstruction.init();
 	roadMeshReconstruction.startReconstruction();
 	auto stop = high_resolution_clock::now();
-	auto duration = duration_cast<microseconds>(stop - start);
+	auto duration = duration_cast<seconds>(stop - start);
 
-	cout << "time :" << duration.count() << endl;
+	cout << "time :" << duration.count() << " seconds" << endl;
 }

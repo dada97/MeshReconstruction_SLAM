@@ -1,6 +1,7 @@
 #include "cnpy.h"
 #include <filesystem>
 #include "csv_parser.h"
+#include "Config.h"
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
@@ -99,38 +100,45 @@ public:
 private:
 	
 	void readData(int index);
-	void findRoadContours();
-	void calculateCameraHeight();
+	void findRoadMask();				//find roud contours from segmentation image 
+	void calculateCameraHeight(); 
 	void buildPointCloud();
-	void delaunayTriangulation();
-	void outputDelaunay(); //outputDelaunay result
-	void outputOBJ(); //output Result Mesh
-
 	std::vector<std::vector<cv::Point>> findPointCloudContours(float min_x, float max_x, float min_y, float max_y);
+	void delaunayTriangulation();
+
+	void outputPointCloud();					//output Pointcloud
+	void outputDelaunay(string path);			//output Delaunay result
+	void outputOBJ(Mesh mesh,string path);		//output mesj
+
 	std::pair<float, float> projectToUV(float x, float y, float z); //project 3d point to UV space
+
+	string input_dir;
+	string output_dir="./output/";
+	string debug_dir="./debug/";
 
 	vector<string> frame_name;
 
-	string input_dir;
-	string output_dir;
 	bool debugMode = false;
+
 	float camHeight = 0;
 	float prevHeight = 0;
 	
 	std::vector<Point_3> pc;
-	Mesh m;
-	CDT dt;
+	std::vector<cv::Vec3b> pc_color;
+	Mesh m;		
+	Mesh m_floor;
 
-	float cnt_w=0;
-	float cnt_h=0;
+	float cnt_w = 0; //pointcloud contour width
+	float cnt_h = 0; //pointcloud contour height
 	
 	Eigen::Quaterniond cur_quat;
 	
-	int fps = 24;
 
 	float pt_minx = FLT_MAX;
 	float pt_maxx = FLT_MIN;
 
 	float pt_miny = FLT_MAX;
 	float pt_maxy = FLT_MIN;
+
+	CDT dt; //constraint delaunay triangulation 
 };

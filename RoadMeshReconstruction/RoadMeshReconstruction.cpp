@@ -1,10 +1,6 @@
 ﻿#include "RoadMeshReconstruction.h"
 
 RoadMeshReconstruction::RoadMeshReconstruction(string input, string output, bool debug) {
-	cout << input << endl;
-	cout << output << endl;
-	cout << debug << endl;
-
 	input_dir = input;
 	output_dir = output;
 	debugMode = debug;
@@ -26,6 +22,10 @@ void RoadMeshReconstruction::init() {
 
 	cv::utils::fs::createDirectory(output_dir);
 
+	if (debugMode == true) {
+		cv::utils::fs::createDirectory(debug_dir);
+	}
+
 	//parse slam data
 	string slam_path = input_dir + "/slam.csv";
 	string landmarks_path = input_dir + "/landmarks.csv";
@@ -40,21 +40,24 @@ void RoadMeshReconstruction::init() {
 void RoadMeshReconstruction::readData(int index) {
 	cout << "read Data : " << frame_name[index] << endl;
 
+	//read depth data
 	string depth_path = input_dir + "/depth/" + frame_name[index] + "_disp.npy";
 	data.depth_arry = cnpy::npy_load(depth_path);
 	data.height = data.depth_arry.shape[2];
 	data.width = data.depth_arry.shape[3];
 
+	//read rgb img
+	string rgb_path = input_dir + "/rgb/" + frame_name[index] + ".jpg";
+	cv::Mat rgb = cv::imread(rgb_path, CV_LOAD_IMAGE_UNCHANGED);
+	data.rgb_ori = rgb;
+	rgb = rgb(cv::Rect(0, int(rgb.rows / 4), rgb.cols, (rgb.rows / 2))); //crop rgb
+
+	//read segmentation image
 	string seg_path = input_dir + "/seg/" + frame_name[index] + "_prediction.png";
 	cv::Mat seg = cv::imread(seg_path, CV_LOAD_IMAGE_COLOR);
 	data.seg_ori = seg;
 
-	string rgb_path = input_dir + "/rgb/" + frame_name[index] + ".jpg";
-	cv::Mat rgb = cv::imread(rgb_path, CV_LOAD_IMAGE_UNCHANGED);
-	data.rgb_ori = rgb;
-	rgb = rgb(cv::Rect(0, int(rgb.rows / 4), rgb.cols, (rgb.rows / 2)));
-
-
+	//resize rgb and segmentation as depth_data size
 	cv::resize(seg, seg, cv::Size(data.width, data.height));
 	cv::resize(rgb, rgb, cv::Size(data.width, data.height));
 
@@ -62,13 +65,13 @@ void RoadMeshReconstruction::readData(int index) {
 	data.rgb = rgb;
 }
 
-void RoadMeshReconstruction::findRoadContours() {
+void RoadMeshReconstruction::findRoadMask() {
 
-	//roud contours
 	cv::Mat road;
 	cv::Mat roadline;
 	cv::Mat other;
 
+	//filter label 
 	cv::inRange(data.seg_ori, cv::Vec3b(128, 64, 128), cv::Vec3b(128, 64, 128), road);
 	cv::inRange(data.seg_ori, cv::Vec3b(255, 255, 255), cv::Vec3b(255, 255, 255), roadline);
 	cv::inRange(data.seg_ori, cv::Vec3b(96, 96, 96), cv::Vec3b(96, 96, 96), other);
@@ -98,7 +101,6 @@ void RoadMeshReconstruction::findRoadContours() {
 	}
 
 	cv::drawContours(filled, contours, id, 255, -1, cv::LINE_8, hierarchy, CV_FILLED);
-
 	data.roadMask = filled;
 }
 
@@ -165,7 +167,6 @@ void RoadMeshReconstruction::calculateCameraHeight() {
 	if (debugMode) {
 		cout << "camHeight: " << camHeight << endl;
 	}
-
 }
 
 std::pair<float, float>  RoadMeshReconstruction::projectToUV(float x, float y, float z) {
@@ -203,114 +204,77 @@ std::pair<float, float>  RoadMeshReconstruction::projectToUV(float x, float y, f
 	return std::make_pair(u, v);
 }
 
-void RoadMeshReconstruction::outputDelaunay() {
-	ofstream ofmesh;
-	ofmesh.open("delaunay.obj");
-	ofmesh << "\n";
-	std::map < CDT::Vertex_handle, unsigned > vm;
-	unsigned ccount = 1;
 
-
-	cout << dt.number_of_vertices() << endl;
-
-	// Loop over vertices
-	for (auto it = dt.vertices_begin(); it != dt.vertices_end(); it++) {
-		vm[it] = ccount;
-		ofmesh << "v " << it->point() << " 0 " << std::endl;
-		++ccount;
-	}
-
-	// Map over facets. Each facet is a cell of the underlying
-	// Delaunay triangulation, and the vertex that is not part of
-	// this facet. We iterate all vertices of the cell except the one
-	// that is opposite.
-	for (auto it = dt.faces_begin(); it != dt.faces_end(); it++) {
-		ofmesh << "f";
-		ofmesh << " " << vm[it->vertex(0)] << " " << vm[it->vertex(1)] << " " << vm[it->vertex(2)];
-		ofmesh << std::endl;
-	}
-	ofmesh.close();
-
-}
 
 std::vector<std::vector<cv::Point>> RoadMeshReconstruction::findPointCloudContours(float min_x, float max_x, float min_y,float max_y) {
 	float w = max_x - min_x;
 	float h = max_y - min_y;
 	
-	//Find contours
-	cv::Mat test = cv::Mat::zeros(cv::Size(w * 15 +10, h * 15+10 ), CV_8UC1);
+	//Find contours from pointcloud
+	cv::Mat pcImg = cv::Mat::zeros(cv::Size(w * PCIMGSCALE +10, h * PCIMGSCALE +10 ), CV_8UC1);
 
-	cout << test.size() << endl;
+	cout << pcImg.size() << endl;
 	for (int i = 0; i < pc.size(); i++) {
 		Point_3 pt = pc[i];
 		float u = (pt.hx() - (min_x)) / (w);
 		float v = (pt.hy() - (min_y)) / (h);
 
 		if (u >= 0 && u < 1.0 && v >= 0 && v < 1.0)
-			test.at<uchar>(v * (test.rows-10)+5, u * (test.cols-10)+5) = 255;
-
+			pcImg.at<uchar>(v * (pcImg.rows-10)+5, u * (pcImg.cols-10)+5) = 255;
 	}
 
-	cout << "contours" << endl;
-	cv::imwrite("before.jpg", test);
+	if (debugMode == true) {
+		cv::imwrite(debug_dir + "pointcloudMask_Original.jpg", pcImg);
+	}
+
 	cv::Mat tmp;
-	test.copyTo(tmp);
-	cout << "smoothh" << endl;
-	//cv::GaussianBlur(test, test, cv::Size(5, 5), 0);
-	//cv::morphologyEx(test, test, cv::MORPH_OPEN, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5)));
-	//cv::inRange(test, 150, 255, test);
+	pcImg.copyTo(tmp);
+
 	for (int i = 0; i < 7; i++) {
 		cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
-		cv::dilate(test, test, element);
-		cv::GaussianBlur(test, test, cv::Size(5, 5), 0);
-		cv::erode(test, test, element);
-		cv::inRange(test, 150, 255, test);
+		cv::dilate(pcImg, pcImg, element);
+		cv::GaussianBlur(pcImg, pcImg, cv::Size(5, 5), 0);
+		cv::erode(pcImg, pcImg, element);
+		cv::inRange(pcImg, 150, 255, pcImg);
 	}
-	test(cv::Rect(5, 5, test.cols-10, test.rows-10)).copyTo(test);
-	cout << "crop" << endl;
-	cnt_w = test.cols;
-	cnt_h = test.rows;
-	cv::imwrite("testimage.jpg", test);
-	//
+	pcImg(cv::Rect(5, 5, pcImg.cols-10, pcImg.rows-10)).copyTo(pcImg);
 
+	cnt_w = pcImg.cols;
+	cnt_h = pcImg.rows;
+
+	if (debugMode == true) {
+		cv::imwrite(debug_dir + "pointcloudMask_Simplify.jpg", pcImg);
+	}
 
 	vector<vector<cv::Point> > contours;
 	vector<cv::Vec4i> hierarchy;
 
-
-	cv::findContours(test, contours, hierarchy, cv::RETR_CCOMP, cv::CHAIN_APPROX_SIMPLE);
+	cv::findContours(pcImg, contours, hierarchy, cv::RETR_CCOMP, cv::CHAIN_APPROX_SIMPLE);
 
 	int id = 0;
 	float max_area = 0;
-	cout << "size : " << contours.size() << endl;
-	cv::Mat drawing = cv::Mat::zeros(test.size(), CV_8UC1);; //=
-
+	cv::Mat cntImg = cv::Mat::zeros(pcImg.size(), CV_8UC1);
 
 	for (size_t i = 0; i < contours.size(); i++)
 	{
 		float area = contourArea(contours[i], false);
-		cout << hierarchy[i] << endl;
 		if (area > max_area) {
 			id = i;
 			max_area = area;
 
 		}
-		drawContours(drawing, contours, i, (255), 1, cv::LINE_8, hierarchy, 0);
+		drawContours(cntImg, contours, i, (255), 1, cv::LINE_8, hierarchy, 0);
 	}
 
-	cv::imwrite("drawing.jpg", drawing);
+	if (debugMode == true) {
+		cv::imwrite(debug_dir + "pointcloudContours.jpg", cntImg);
+	}
+
 	return contours;
 }
 
 void RoadMeshReconstruction::buildPointCloud() {
-
-	cout << "\npointcloud" << endl;
-
 	float angle=0;
-
-	ofstream myfile3;
-	myfile3.open("testpc2.ply");
-
 	for (int keyframe = 0; keyframe< slam_data.size(); keyframe++) {
 
 		current_frame = keyframe;
@@ -342,25 +306,26 @@ void RoadMeshReconstruction::buildPointCloud() {
 		angle = yaw;
 
 		if (debugMode) {
-			cout << "yaw :" << yaw / M_PI * 180 << " pitch: " << pitch / M_PI * 180 << "roll: " << roll / M_PI * 180 << endl;
+			cout << "yaw :" << yaw / M_PI * 180 << " pitch: " << pitch / M_PI * 180 << " roll: " << roll / M_PI * 180 << endl;
 		}
 		
-		int frame = round(slam_data[keyframe].timestamp * fps);
+		int frame = round(slam_data[keyframe].timestamp * FPS);
 		readData(frame);
-		findRoadContours();
+		findRoadMask();
+
 		calculateCameraHeight();
 
 		cv::Mat seg = data.seg_ori;
 		cv::Mat rgb = data.rgb_ori;
 		cv::Mat mask = data.roadMask;
-
+	
 		//build pointcloud
-		int size_n = 100;
+		int size_n = PCSIZE;
 		for (int idx = 0; idx < size_n; idx++) {
 			for (int idy = 0; idy < size_n; idy++) {
 
-				float max =2;
-				float min = -2.0;
+				float max = PCMAXRANGE;
+				float min = PCMINRANGE;
 				float x = (max - min) * idx / (size_n - 1) + min;
 				float y = (max - min) * idy / (size_n - 1) + min;
 
@@ -373,7 +338,7 @@ void RoadMeshReconstruction::buildPointCloud() {
 					float b = 0;
 					float c = 1;
 
-					float d = camHeight * 0.5;
+					float d = camHeight * CAMERAHEIGHTSCALE;
 
 					float z = (-d - (a * x) - (b * y)) / c;
 					pair<float, float> uv = projectToUV(x, y, z);
@@ -395,11 +360,11 @@ void RoadMeshReconstruction::buildPointCloud() {
 							float wx = pt.x() + slam_data[keyframe].position.x;
 							float wy = pt.y() - slam_data[keyframe].position.z;
 							float wz = pt.z();
-							
+	
 							cv::Vec3b color = rgb.at<cv::Vec3b>((int)(uv.first * rgb.rows), (int)(uv.second * rgb.cols));
+							pc.push_back(Point_3(wx, wy, wz));
+							pc_color.push_back(color);
 							
-							myfile3 << wx<<" "<<wy<<" "<<wz<< " "<<(int)color[2]<< " "<< (int)color[1]<< " "<< (int)color[0] << "\n";
-
 							if (wx > pt_maxx) {
 								pt_maxx = wx;
 							}
@@ -413,7 +378,7 @@ void RoadMeshReconstruction::buildPointCloud() {
 								pt_miny = wy;
 							}
 						
-							pc.push_back(Point_3(wx, wy, wz));
+
 						}
 					}
 					else {
@@ -423,11 +388,10 @@ void RoadMeshReconstruction::buildPointCloud() {
 						float wx = pt.x() + slam_data[keyframe].position.x;
 						float wy = pt.y() - slam_data[keyframe].position.z;
 						float wz = pt.z();
-						pc.push_back(Point_3(wx,wy, wz));
-
+				
 						cv::Vec3b color = rgb.at<cv::Vec3b>((int)(uv.first * rgb.rows), (int)(uv.second * rgb.cols));
-
-						myfile3 << wx << " " << wy << " " << wz << " " << (int)color[2] << " " << (int)color[1] << " " << (int)color[0] << "\n";
+						pc.push_back(Point_3(wx, wy, wz));
+						pc_color.push_back(color);
 
 						if (wx > pt_maxx) {
 							pt_maxx = wx;
@@ -447,38 +411,26 @@ void RoadMeshReconstruction::buildPointCloud() {
 		}
 	}
 
-	myfile3.close();
+	if (debugMode == true) {
+		outputPointCloud();
+	}
 }
 
 void RoadMeshReconstruction::delaunayTriangulation() {
 
 	vector<vector<cv::Point> > contours = findPointCloudContours(pt_minx, pt_maxx, pt_miny, pt_maxy);
-	ofstream myfile3;
-	myfile3.open("testpc3.ply");
-
-	//build 2d Polygon 
+	//build 2d Polygon from contours edge
 	vector<Polygon_2> allPoly;
-
 	for (size_t i = 0; i < contours.size(); i++)
 	{
 		Polygon_2 polygon;
 		for (int j = 0; j < contours[i].size(); j++) {
 			int current_id = j;
-			int next_id = (j + 1) % contours[i].size();
 			cv::Point pt = contours[i][current_id];
-			cv::Point pt_next = contours[i][next_id];
-
-			
+	
 			float x = ((float)pt.x / (float)(cnt_w)) * (pt_maxx - pt_minx) + pt_minx;
 			float y = ((float)pt.y / (float)(cnt_h)) * (pt_maxy - pt_miny) + pt_miny;
-
-			float next_x = ((float)pt_next.x / (float)(cnt_w)) * (pt_maxx - pt_minx) + pt_minx;
-			float next_y = ((float)pt_next.y / (float)(cnt_h)) * (pt_maxy - pt_miny) + pt_miny;
-	
-
 			polygon.push_back(Point_2(x, y));
-
-
 		}
 		allPoly.push_back(polygon);
 	}
@@ -488,13 +440,21 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 		dt.insert_constraint(allPoly[i].vertices_begin(), allPoly[i].vertices_end(), true);
 	}
 
-	//outputDelaunay();
+	if (debugMode == true) {
+		string output_path = cv::utils::fs::join(debug_dir, "Delaunay.obj");
+		outputDelaunay(output_path);
+	}
 
 	std::list<Point_2> list_of_seeds;
 	list_of_seeds.push_back(Point_2(0, 0));
 
 	//refine Delaunay 
 	CGAL::refine_Delaunay_mesh_2(dt, list_of_seeds.begin(), list_of_seeds.end(), Criteria(0.0001, 1.0), true);
+
+	if (debugMode == true) {
+		string output_path = cv::utils::fs::join(debug_dir, "DelaunayRefinement.obj");
+		outputDelaunay(output_path);
+	}
 
 	//build wall along the mesh edge
 	int face_count = 0;
@@ -519,14 +479,20 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 			Mesh::Vertex_index w = m.add_vertex(v3);
 			m.add_face(u, v, w);
 
-			Point_3 v4 = Point_3(fit->vertex(0)->point().hx(), fit->vertex(0)->point().hy(), z1+4);
-			Point_3 v5 = Point_3(fit->vertex(1)->point().hx(), fit->vertex(1)->point().hy(), z2+4);
-			Point_3 v6 = Point_3(fit->vertex(2)->point().hx(), fit->vertex(2)->point().hy(), z3+4);
+			u = m_floor.add_vertex(v1);
+			v = m_floor.add_vertex(v2);
+			w = m_floor.add_vertex(v3);
+			m_floor.add_face(u, v, w);
+
+			Point_3 v4 = Point_3(fit->vertex(0)->point().hx(), fit->vertex(0)->point().hy(), z1 + CEILINGHEIGHT);
+			Point_3 v5 = Point_3(fit->vertex(1)->point().hx(), fit->vertex(1)->point().hy(), z2 + CEILINGHEIGHT);
+			Point_3 v6 = Point_3(fit->vertex(2)->point().hx(), fit->vertex(2)->point().hy(), z3 + CEILINGHEIGHT);
 
 			u = m.add_vertex(v6);
 			v = m.add_vertex(v5);
 			w = m.add_vertex(v4);
 			m.add_face(u, v, w);
+
 
 			for (int j = 0; j < 3; j++) {
 				if (fit->is_constrained(j)) {
@@ -542,7 +508,7 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 
 					Point_3 v1 = Point_3(pt1.hx(), pt1.hy(), z1);
 					Point_3 v2 = Point_3(pt2.hx(), pt2.hy(), z2);
-					Point_3 v3 = Point_3(pt2.hx(), pt2.hy(), z2 + 4);
+					Point_3 v3 = Point_3(pt2.hx(), pt2.hy(), z2 + CEILINGHEIGHT);
 
 
 					Mesh::Vertex_index u = m.add_vertex(v1);
@@ -550,8 +516,8 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 					Mesh::Vertex_index w = m.add_vertex(v3);
 					m.add_face(u, v, w);
 
-					v1 = Point_3(pt2.hx(), pt2.hy(), z2 + 4);
-					v2 = Point_3(pt1.hx(), pt1.hy(), z1 + 4);
+					v1 = Point_3(pt2.hx(), pt2.hy(), z2 + CEILINGHEIGHT);
+					v2 = Point_3(pt1.hx(), pt1.hy(), z1 + CEILINGHEIGHT);
 					v3 = Point_3(pt1.hx(), pt1.hy(), z1);
 
 					u = m.add_vertex(v1);
@@ -562,49 +528,104 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 			}
 		}
 	}
+
+	if (debugMode == true) {
+		string output_path = cv::utils::fs::join(debug_dir, "mesh_Floor.obj");
+		outputOBJ(m_floor, output_path);
+	}
 }
 
-void RoadMeshReconstruction::outputOBJ() {
+void RoadMeshReconstruction::outputPointCloud() {
+	cout << "write pointcloud" << endl;
+	ofstream of;
+	string output_path = cv::utils::fs::join(debug_dir, "pointcloud.ply");
+	of.open(output_path);
+	of << "ply\n"
+		<< "format ascii 1.0\n"
+		<< "element vertex " + std::to_string(pc.size()) << "\n"
+		<< "property float x\n"
+		<< "property float y\n"
+		<< "property float z\n"
+		<< "property uint8 red\n"
+		<< "property uint8 green\n"
+		<< "property uint8 blue\n"
+		<< "end_header\n";
+	for (int i = 0; i < pc.size(); i++) {
+		cv::Vec3b color = pc_color[i];
+		of << pc[i].hx()<<" "<< pc[i].hy()<<" "<< pc[i].hz() << " " << (int)color[2] << " " << (int)color[1] << " " << (int)color[0] << "\n";
+	}
+	of.close();
+}
 
-	string output_path = cv::utils::fs::join(output_dir, "outputMesh.obj");
+void RoadMeshReconstruction::outputDelaunay(string path) {
+	cout << "write delaunay" << endl;
+	ofstream ofmesh;
 
-	ofstream myfile;
-	myfile.open(output_path);
-	std::map<Mesh::Vertex_index, unsigned> vertex_map;
-	unsigned count = 1;
-
-	cout << dt.number_of_vertices() << endl;
+	ofmesh.open(path);
+	ofmesh << "\n";
+	std::map < CDT::Vertex_handle, unsigned > vm;
+	unsigned ccount = 1;
 
 	// Loop over vertices
-	for (Mesh::Vertex_index vi : m.vertices()) {
-		K::Point_3 pt = m.point(vi);
-		vertex_map[vi] = count;
-		++count;
-		myfile << "v " << pt << "\n";
+	for (auto it = dt.vertices_begin(); it != dt.vertices_end(); it++) {
+		vm[it] = ccount;
+		ofmesh << "v " << it->point() << " 0 " << std::endl;
+		++ccount;
 	}
 
-	myfile << "\n";
 	// Map over facets. Each facet is a cell of the underlying
 	// Delaunay triangulation, and the vertex that is not part of
 	// this facet. We iterate all vertices of the cell except the one
 	// that is opposite.
-	for (Mesh::Face_index face_index : m.faces()) {
-		myfile << "f";
-		Mesh::Halfedge_index hf = m.halfedge(face_index);
-		for (Mesh::Halfedge_index hi : halfedges_around_face(hf, m))
-		{
-			Mesh::Vertex_index vi = target(hi, m);
-			myfile << " " << vertex_map[vi];
-		}
-		myfile << std::endl;
+	for (auto it = dt.faces_begin(); it != dt.faces_end(); it++) {
+		ofmesh << "f";
+		ofmesh << " " << vm[it->vertex(0)] << " " << vm[it->vertex(1)] << " " << vm[it->vertex(2)];
+		ofmesh << std::endl;
+	}
+	ofmesh.close();
+}
+
+void RoadMeshReconstruction::outputOBJ(Mesh mesh,string path) {
+	cout << "write mesh" << endl;
+
+	ofstream of;
+	of.open(path);
+	std::map<Mesh::Vertex_index, unsigned> vertex_map;
+	unsigned count = 1;
+
+	// Loop over vertices
+	for (Mesh::Vertex_index vi : mesh.vertices()) {
+		K::Point_3 pt = mesh.point(vi);
+		vertex_map[vi] = count;
+		++count;
+		of << "v " << pt << "\n";
 	}
 
-	myfile.close();
+	of << "\n";
+	// Map over facets. Each facet is a cell of the underlying
+	// Delaunay triangulation, and the vertex that is not part of
+	// this facet. We iterate all vertices of the cell except the one
+	// that is opposite.
+	for (Mesh::Face_index face_index : mesh.faces()) {
+		of << "f";
+		Mesh::Halfedge_index hf = mesh.halfedge(face_index);
+		for (Mesh::Halfedge_index hi : halfedges_around_face(hf, mesh))
+		{
+			Mesh::Vertex_index vi = target(hi, mesh);
+			of << " " << vertex_map[vi];
+		}
+		of << std::endl;
+	}
+
+	of.close();
 }
 
 
 void RoadMeshReconstruction::startReconstruction() {
 	buildPointCloud();
 	delaunayTriangulation();
-	outputOBJ();
+	
+	//write Result
+	string output_path = cv::utils::fs::join(output_dir, "outputMesh.obj");
+	outputOBJ(m,output_path);
 }

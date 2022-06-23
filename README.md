@@ -1,9 +1,15 @@
 # RoadMeshReconstruction
-this project run on Visual Studio 2019
+## Overview
+![Alt text](./assets/RoadMesh.png?raw=true "Title")
+
+## Visual studio Version
+this project build on Visual Studio 2019
 
 ## Third Party Libraries
-- Opencv
-- CGAL
+- Opencv 3.4.0
+- CGAL 5.4
+- Boost 1.71
+- Eigen 3.4
 
 ## Input Data structure
 ```bash
@@ -22,14 +28,13 @@ this project run on Visual Studio 2019
 │   └── ...
 └── slamData.csv
 ```
-## Output Data structure
+
+## Output Data
 ```bash
-.
-├── output.obj
-└── pointcloud.ply
+./[output_dir]/outputMesh.obj
 ```
 
-## Command Line
+## Test Example
 ```bash
-MeshReconstruction.exe [input_dir] [output_dr]
+MeshReconstruction.exe -i [input_dir] -o [output_dir] -d [boolean]
 ```
