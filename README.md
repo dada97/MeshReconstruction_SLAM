@@ -34,6 +34,11 @@ this project build on Visual Studio 2019
 ./[output_dir]/outputMesh.obj
 ```
 
+## SLAM Data Preprocess
+```bash
+python map.py [map file] [csv destination]
+```
+
 ## Test Example
 ```bash
 MeshReconstruction.exe -i [input_dir] -o [output_dir] -d [boolean]
