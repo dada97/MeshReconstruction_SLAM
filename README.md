@@ -34,9 +34,20 @@ this project build on Visual Studio 2019
 ./[output_dir]/outputMesh.obj
 ```
 
-## SLAM Data Preprocess
+## Video to Image Sequence
+
+Example: python videoToImg.py ./video.mp4 ./rgb
 ```bash
-python map.py [map file] [csv destination]
+python videoToImg.py [input_path].mp4 [output_dir]
+```
+
+## SLAM Data Preprocess
+
+Example: python msgToCSV.py.py ./map.msg ./
+
+output: [output_path]/slamData.csv
+```bash
+python map.py [input_path].msg [output_path]
 ```
 
 ## Test Example

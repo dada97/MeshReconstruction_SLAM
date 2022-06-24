@@ -10,6 +10,9 @@ from autolab_core import RigidTransform
 
 def main(bin_fn, dest_fn):
 
+    output = os.path.join(dest_fn, "slamData.csv");
+    print("output file :" + output)
+
     # Read file as binary and unpack data using MessagePack library
     with open(bin_fn, "rb") as f:
         data = msgpack.unpackb(f.read(), use_list=False, raw=False)
@@ -21,7 +24,7 @@ def main(bin_fn, dest_fn):
     key_frame = {int(k): v for k, v in key_frames.items()}
 
   
-    with open(dest_fn+"/", "w") as f:
+    with open(output, "w") as f:
         f.write("key_frame_id,pos_x,pos_y,pos_z,rot_x,rot_y,rot_z,rot_w,timestamp\n")
         for key in sorted(key_frame.keys()):
             
@@ -34,6 +37,7 @@ def main(bin_fn, dest_fn):
             pos = np.matmul(rigid_cw.rotation, trans_cw)
 
             f.write("{},{},{},{},{},{},{},{},{}\n".format(key,pos[0], pos[1], pos[2],rot_cw[0],rot_cw[1],rot_cw[2],rot_cw[3],ts),)
+    print("Done")
 
 if __name__ == "__main__":
     argv = sys.argv
@@ -41,7 +45,7 @@ if __name__ == "__main__":
     if len(argv) < 3:
         print("Unpack all slam in the map file and dump into a csv file")
         print("Usage: ")
-        print("    python map.py [map file] [csv destination]")
+        print("    python msgToCSV.py [map file] [csv destination]")
 
     else:
         bin_fn = argv[1]
