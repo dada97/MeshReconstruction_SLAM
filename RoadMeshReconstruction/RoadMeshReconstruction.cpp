@@ -458,6 +458,9 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 
 	//build wall along the mesh edge
 	int face_count = 0;
+
+	std::map<Point_3, Mesh::Vertex_index> vertex_map;
+
 	for (CDT::Finite_faces_iterator fit = dt.finite_faces_begin(); fit != dt.finite_faces_end(); ++fit)
 	{
 		if (fit->is_in_domain()) {
@@ -474,10 +477,13 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 			Point_3 v2 = Point_3(fit->vertex(1)->point().hx(), fit->vertex(1)->point().hy(), z2);
 			Point_3 v3 = Point_3(fit->vertex(2)->point().hx(), fit->vertex(2)->point().hy(), z3);
 
+			addMeshFace(v1, v2, v3);
+
+
 			Mesh::Vertex_index u = m.add_vertex(v1);
 			Mesh::Vertex_index v = m.add_vertex(v2);
 			Mesh::Vertex_index w = m.add_vertex(v3);
-			m.add_face(u, v, w);
+			//m.add_face(u, v, w);
 
 			u = m_floor.add_vertex(v1);
 			v = m_floor.add_vertex(v2);
@@ -488,10 +494,12 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 			Point_3 v5 = Point_3(fit->vertex(1)->point().hx(), fit->vertex(1)->point().hy(), z2 + CEILINGHEIGHT);
 			Point_3 v6 = Point_3(fit->vertex(2)->point().hx(), fit->vertex(2)->point().hy(), z3 + CEILINGHEIGHT);
 
-			u = m.add_vertex(v6);
+			addMeshFace(v6, v5, v4);
+
+			/*u = m.add_vertex(v6);
 			v = m.add_vertex(v5);
 			w = m.add_vertex(v4);
-			m.add_face(u, v, w);
+			m.add_face(u, v, w);*/
 
 
 			for (int j = 0; j < 3; j++) {
@@ -510,20 +518,21 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 					Point_3 v2 = Point_3(pt2.hx(), pt2.hy(), z2);
 					Point_3 v3 = Point_3(pt2.hx(), pt2.hy(), z2 + CEILINGHEIGHT);
 
-
-					Mesh::Vertex_index u = m.add_vertex(v1);
+					addMeshFace(v1, v2, v3);
+					/*Mesh::Vertex_index u = m.add_vertex(v1);
 					Mesh::Vertex_index v = m.add_vertex(v2);
 					Mesh::Vertex_index w = m.add_vertex(v3);
-					m.add_face(u, v, w);
+					m.add_face(u, v, w);*/
 
 					v1 = Point_3(pt2.hx(), pt2.hy(), z2 + CEILINGHEIGHT);
 					v2 = Point_3(pt1.hx(), pt1.hy(), z1 + CEILINGHEIGHT);
 					v3 = Point_3(pt1.hx(), pt1.hy(), z1);
+					addMeshFace(v1, v2, v3);
 
-					u = m.add_vertex(v1);
+				/*	u = m.add_vertex(v1);
 					v = m.add_vertex(v2);
 					w = m.add_vertex(v3);
-					m.add_face(u, v, w);
+					m.add_face(u, v, w);*/
 				}
 			}
 		}
@@ -534,6 +543,38 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 		outputOBJ(m_floor, output_path);
 	}
 }
+
+void RoadMeshReconstruction::addMeshFace(Point_3 v1, Point_3 v2, Point_3 v3) {
+	Mesh::Vertex_index f1;
+	Mesh::Vertex_index f2;
+	Mesh::Vertex_index f3;
+
+	if (vt_map.find(v1) == vt_map.end()) {
+		f1 = m.add_vertex(v1);
+		vt_map[v1] = f1;
+	}
+	else {
+		f1 = vt_map[v1];
+	}
+
+	if (vt_map.find(v2) == vt_map.end()) {
+		f2 = m.add_vertex(v2);
+		vt_map[v2] = f2;
+	}
+	else {
+		f2 = vt_map[v2];
+	}
+
+	if (vt_map.find(v3) == vt_map.end()) {
+		f3 = m.add_vertex(v3);
+		vt_map[v3] = f3;
+	}
+	else {
+		f3 = vt_map[v3];
+	}
+	m.add_face(f1, f2, f3);
+
+};
 
 void RoadMeshReconstruction::outputPointCloud() {
 	cout << "write pointcloud" << endl;

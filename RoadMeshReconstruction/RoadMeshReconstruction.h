@@ -105,6 +105,7 @@ private:
 	void buildPointCloud();
 	std::vector<std::vector<cv::Point>> findPointCloudContours(float min_x, float max_x, float min_y, float max_y);
 	void delaunayTriangulation();
+	void addMeshFace(Point_3 v1,Point_3 v2,Point_3 v3);
 
 	void outputPointCloud();					//output Pointcloud
 	void outputDelaunay(string path);			//output Delaunay result
@@ -141,4 +142,6 @@ private:
 	float pt_maxy = FLT_MIN;
 
 	CDT dt; //constraint delaunay triangulation 
+
+	std::map<Point_3, Mesh::Vertex_index> vt_map; //Point map to mesh vertex index
 };
