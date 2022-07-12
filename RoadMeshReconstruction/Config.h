@@ -4,11 +4,10 @@
 
 //build pointcloud config
 #define PCSIZE 100			//pointcloud number NxN points 
-#define PCMAXRANGE 2.0		//pointcloud range 
-#define PCMINRANGE -2.0		//pointcloud range
+#define PCRANGE 5		//pointcloud range 
 
 #define PCIMGSCALE 15
 
-#define CAMERAHEIGHTSCALE 0.5
+#define SLAMSCALEFACTOR 1.0 //SLAM Scale
 
 #define CEILINGHEIGHT 4		//mesh ceiling height

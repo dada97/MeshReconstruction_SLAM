@@ -1,3 +1,5 @@
+
+
 import os
 import sys
 import msgpack
@@ -38,7 +40,7 @@ def main(bin_fn, dest_fn):
             rot_wc = rot.T
             trans_wc = - rot_wc * trans_cw
 
-            f.write("{},{},{},{},{},{},{},{},{},{}\n".format(count,key,trans_wc[0, 0], trans_wc[1, 0],trans_wc[2, 0],rot_cw[0],rot_cw[1],rot_cw[2],rot_cw[3],ts),)
+            f.write("{},{},{},{},{},{},{},{},{},{}\n".format(count,key,trans_wc[0, 0], trans_wc[1, 0],-trans_wc[2, 0],rot_cw[0],rot_cw[1],rot_cw[2],rot_cw[3],ts),)
     print("Done")
 
 if __name__ == "__main__":
