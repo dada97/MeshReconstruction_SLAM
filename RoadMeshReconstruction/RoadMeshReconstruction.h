@@ -91,6 +91,7 @@ class RoadMeshReconstruction {
 public:
 	InputData data;
 	vector<Slam_data> slam_data;
+	vector<Landmark_data> landmarks_data;
 	RoadMeshReconstruction(string input, string output,bool debug);
 	void init();
 	void startReconstruction();
@@ -102,6 +103,7 @@ private:
 	void readData(int index);
 	void findRoadMask();				//find roud contours from segmentation image 
 	void calculateCameraHeight(); 
+	void analyzeLandmarks();
 	void buildPointCloud();
 	std::vector<std::vector<cv::Point>> findPointCloudContours(float min_x, float max_x, float min_y, float max_y);
 	void delaunayTriangulation();
@@ -122,6 +124,10 @@ private:
 	bool debugMode = false;
 
 	float camHeight = 0;
+
+
+	float slamHeight = 0;
+
 	float prevHeight = 0;
 	
 	std::vector<Point_3> pc;

@@ -32,6 +32,7 @@ int main(int argc, char* argv[]) {
                 debug_mode = false;
             }
             else if(needDebug == "true") {
+                cout<<"debug on" <<endl;
                 debug_mode = true;
             }
         }

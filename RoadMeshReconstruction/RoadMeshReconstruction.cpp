@@ -35,6 +35,8 @@ void RoadMeshReconstruction::init() {
 	char delimiter = ',';
 	CSV_parser csv_parser(slam_path);
 	slam_data = csv_parser.get_slamdata();
+	csv_parser.read_landmarks(landmarks_path);
+	landmarks_data = csv_parser.get_landmarksdata();
 }
 
 void RoadMeshReconstruction::readData(int index) {
@@ -49,6 +51,7 @@ void RoadMeshReconstruction::readData(int index) {
 	//read rgb img
 	string rgb_path = input_dir + "/rgb/" + frame_name[index] + ".jpg";
 	cv::Mat rgb = cv::imread(rgb_path, CV_LOAD_IMAGE_UNCHANGED);
+	//cv::cvtColor(rgb, rgb, CV_BGRA2BGR);
 	data.rgb_ori = rgb;
 	rgb = rgb(cv::Rect(0, int(rgb.rows / 4), rgb.cols, (rgb.rows / 2))); //crop rgb
 
@@ -56,13 +59,14 @@ void RoadMeshReconstruction::readData(int index) {
 	string seg_path = input_dir + "/seg/" + frame_name[index] + "_prediction.png";
 	cv::Mat seg = cv::imread(seg_path, CV_LOAD_IMAGE_COLOR);
 	data.seg_ori = seg;
-
+	
 	//resize rgb and segmentation as depth_data size
 	cv::resize(seg, seg, cv::Size(data.width, data.height));
 	cv::resize(rgb, rgb, cv::Size(data.width, data.height));
 
 	data.seg = seg;
 	data.rgb = rgb;
+
 }
 
 void RoadMeshReconstruction::findRoadMask() {
@@ -112,6 +116,21 @@ void RoadMeshReconstruction::calculateCameraHeight() {
 
 	cv::Mat mask = data.roadMask;
 	cv::resize(mask, mask, cv::Size(data.width, data.height));
+	float min_disp = FLT_MIN;
+	float max_disp = FLT_MAX;
+
+	for (int y = 0; y < data.height; y++) {
+		for (int x = 0; x < data.width; x++) {
+			int idx = y * data.rgb.cols + x;
+			if (depth_data[idx] > max_disp) {
+				max_disp = depth_data[idx];
+			}
+			if (depth_data[idx] < min_disp) {
+				min_disp = depth_data[idx];
+			}
+		}
+	}
+
 
 	for (int y = 0; y < data.height; y++) {
 		for (int x = 0; x < data.width; x++) {
@@ -121,10 +140,17 @@ void RoadMeshReconstruction::calculateCameraHeight() {
 
 				int idx = y * data.rgb.cols + x;
 
-				//pixel actual depth
-				float depth = 1 / (depth_data[idx]);
 
-				if (depth <= 4.0) {
+				float depth = 1 / depth_data[idx] * 5;
+		
+				//pixel actual depth
+				//float depth = data.rgb.cols * 721.5377 / (1242 * (depth_data[idx]));
+				
+	
+				
+				//cout<< 721 * 0.54/192
+
+				if (depth <= 10.0) {
 					//calculate 3d point from 2d pixel point; 
 					float a = ((float)x / (float)(data.rgb.cols - 1)) * (2 * M_PI);
 					float b = ((float)y / (float)(data.rgb.rows - 1)) * (M_PI) * 0.5 - (0.25 * M_PI);
@@ -141,8 +167,30 @@ void RoadMeshReconstruction::calculateCameraHeight() {
 			}
 		}
 	}
-	
-	
+
+
+	cout << "write pointcloud" << endl;
+	ofstream of;
+	string output_path = cv::utils::fs::join(debug_dir, "singlepointcloud.ply");
+	of.open(output_path);
+	of << "ply\n"
+		<< "format ascii 1.0\n"
+		<< "element vertex " + std::to_string(points_3.size()) << "\n"
+		<< "property float x\n"
+		<< "property float y\n"
+		<< "property float z\n"
+		<< "property uint8 red\n"
+		<< "property uint8 green\n"
+		<< "property uint8 blue\n"
+		<< "end_header\n";
+	for (int i = 0; i < points_3.size(); i++) {
+		cv::Vec3b color = colors_3[i];
+		of << points_3[i].hx() << " " << points_3[i].hy() << " " << points_3[i].hz() << " " << (int)color[2] << " " << (int)color[1] << " " << (int)color[0] << "\n";
+	}
+	of.close();
+
+
+
 	// least square method find plane equation
 	Plane plane;
 	Point_3 centeroid;
@@ -176,6 +224,118 @@ void RoadMeshReconstruction::calculateCameraHeight() {
 
 	}
 }
+
+void RoadMeshReconstruction::analyzeLandmarks() {
+	//myfile.open("test.obj");
+	std::map<int, int> keyframe_map;
+	for (int i = 0; i < slam_data.size(); i++) {
+		int keyframe = slam_data[i].key_frame_id;
+		keyframe_map[keyframe] = i;
+
+	}
+	// Loop over vertices
+	int currentid = -1;
+
+	cv::Mat seg_img;
+
+	cv::Mat rgb;
+	ofstream myfile;
+	std::vector<Point_3> testPoints;
+	myfile.open("testoutput.obj");
+
+	cv::Mat road;
+	cv::Mat roadline;
+	cv::Mat other;
+
+	int cur_frame = -1;
+	for (int i = 0; i < landmarks_data.size(); i++) {
+
+		float x = landmarks_data[i].position.x ;
+		float y = landmarks_data[i].position.z ;
+		float z = -landmarks_data[i].position.y ;
+
+		auto iter = keyframe_map.find(landmarks_data[i].ref_keyframe);
+	
+
+		int frame = slam_data[iter->second].key_frame_id;
+	
+		
+		if (cur_frame != frame) {
+			//read segmentation image
+			string seg_path = input_dir + "/seg/" + frame_name[frame] + "_prediction.png";
+			seg_img = cv::imread(seg_path, CV_LOAD_IMAGE_COLOR);
+			cv::inRange(seg_img, cv::Vec3b(128, 64, 128), cv::Vec3b(128, 64, 128), road);
+			cv::inRange(seg_img, cv::Vec3b(255, 255, 255), cv::Vec3b(255, 255, 255), roadline);
+			cv::inRange(seg_img, cv::Vec3b(96, 96, 96), cv::Vec3b(96, 96, 96), other);
+
+			roadline.copyTo(road, roadline);
+			other.copyTo(road, other);
+		}
+		
+		
+
+
+
+
+		Eigen::Vector3d pt(x, y, z);
+			
+
+
+		Eigen::Vector3d pt2(slam_data[frame].position.x, slam_data[frame].position.z, -slam_data[frame].position.y);
+
+		Eigen::Vector3d pt3 = pt - pt2;
+
+		Eigen::Quaterniond q(slam_data[frame].quaternion.w, slam_data[frame].quaternion.x, -slam_data[frame].quaternion.z, slam_data[frame].quaternion.y);
+
+
+		Eigen::Vector3d pt_l = q.conjugate() * pt3;
+		pair<float, float> uv = projectToUV(pt_l.x(), pt_l.y(), pt_l.z());
+		
+
+		
+
+		
+
+			
+		uv.second += 0.25;
+		if (uv.second > 1) {
+			uv.second -= 1;
+		}
+		if (uv.first >= 0.25 && uv.first < 0.75) {
+			int u_y = (uv.first - 0.25) / 0.5 * (road.rows);
+		
+			int v_x = uv.second * (road.cols);
+
+			if ((int)road.at<uchar>(u_y, v_x) == 255) {
+				
+				testPoints.push_back(Point_3(pt.x(), pt.y(), pt.z()));
+
+				if (testPoints.size() == 500) {
+					break;
+				}
+			}
+
+		}
+		
+	}
+	// Loop over vertices
+
+	Plane plane;
+	Point_3 centeroid;
+	linear_least_squares_fitting_3(testPoints.begin(), testPoints.end(), plane, centeroid, CGAL::Dimension_tag<0>());
+
+	slamHeight = plane.d();
+
+	for (int i = 0; i < testPoints.size(); i++) {
+		Point_3 pt = testPoints[i];
+
+		myfile << "v " << pt << "\n";
+	}
+	myfile.close();
+
+
+}
+
 
 std::pair<float, float>  RoadMeshReconstruction::projectToUV(float x, float y, float z) {
 	float u, v;
@@ -283,6 +443,8 @@ std::vector<std::vector<cv::Point>> RoadMeshReconstruction::findPointCloudContou
 
 void RoadMeshReconstruction::buildPointCloud() {
 	float angle=0;
+	float scale = 1;
+
 	for (int keyframe = 0; keyframe <slam_data.size(); keyframe++) {
 
 		current_frame = keyframe;
@@ -323,6 +485,14 @@ void RoadMeshReconstruction::buildPointCloud() {
 
 		calculateCameraHeight();
 
+		if (keyframe == 0) {
+			 scale = abs(camHeight / slamHeight);
+			 ofstream of;
+			 string output_path = cv::utils::fs::join(output_dir, "scale.txt");
+			 of.open(output_path);
+			 of << scale << endl;
+		}
+
 		cv::Mat seg = data.seg_ori;
 		cv::Mat rgb = data.rgb_ori;
 		cv::Mat mask = data.roadMask;
@@ -346,7 +516,7 @@ void RoadMeshReconstruction::buildPointCloud() {
 					float b = 0;
 					float c = 1;
 
-					float d = camHeight+1;
+					float d = camHeight;
 
 					float z = (-d - (a * x) - (b * y)) / c;
 					pair<float, float> uv = projectToUV(x, y, z);
@@ -355,7 +525,7 @@ void RoadMeshReconstruction::buildPointCloud() {
 						uv.second -= 1;
 					}
 
-					float scale = 1;
+			
 					if (uv.first >= 0.25 && uv.first < 0.75) {
 						int u_y = (uv.first - 0.25) / 0.5 * (mask.rows);
 						int v_x = uv.second * (mask.cols);
@@ -364,9 +534,9 @@ void RoadMeshReconstruction::buildPointCloud() {
 							
 							Eigen::Vector3d pt(x,y,z);
 							pt = cur_quat * pt;
-
-							float wx = pt.x() + slam_data[keyframe].position.x * SLAMSCALEFACTOR;
-							float wy = pt.y() - slam_data[keyframe].position.z * SLAMSCALEFACTOR;
+						
+							float wx = pt.x() + slam_data[keyframe].position.x * scale;
+							float wy = pt.y() - slam_data[keyframe].position.z * scale;
 							float wz = pt.z();
 	
 							cv::Vec3b color = rgb.at<cv::Vec3b>((int)(uv.first * rgb.rows), (int)(uv.second * rgb.cols));
@@ -393,8 +563,8 @@ void RoadMeshReconstruction::buildPointCloud() {
 	
 						Eigen::Vector3d pt(x, y, z);
 						pt = cur_quat * pt; 
-						float wx = pt.x()  + slam_data[keyframe].position.x * SLAMSCALEFACTOR;
-						float wy = pt.y()  - slam_data[keyframe].position.z * SLAMSCALEFACTOR;
+						float wx = pt.x()  + slam_data[keyframe].position.x * scale;
+						float wy = pt.y()  - slam_data[keyframe].position.z * scale;
 						float wz = pt.z();
 				
 						cv::Vec3b color = rgb.at<cv::Vec3b>((int)(uv.first * rgb.rows), (int)(uv.second * rgb.cols));
@@ -475,7 +645,7 @@ void RoadMeshReconstruction::delaunayTriangulation() {
 			float a = 0;
 			float b = 0;
 			float c = 1;
-			float d = camHeight + 1;
+			float d = camHeight ;
 
 			float z1 = (-d - (a * fit->vertex(0)->point().hx()) - (b * fit->vertex(0)->point().hy())) / c;
 			float z2 = (-d - (a * fit->vertex(1)->point().hx()) - (b * fit->vertex(1)->point().hy())) / c;
@@ -671,6 +841,7 @@ void RoadMeshReconstruction::outputOBJ(Mesh mesh,string path) {
 
 
 void RoadMeshReconstruction::startReconstruction() {
+	analyzeLandmarks();
 	buildPointCloud();
 	delaunayTriangulation();
 	

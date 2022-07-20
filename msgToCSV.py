@@ -43,6 +43,20 @@ def main(bin_fn, dest_fn):
             f.write("{},{},{},{},{},{},{},{},{},{}\n".format(count,key,trans_wc[0, 0], trans_wc[1, 0],-trans_wc[2, 0],rot_cw[0],rot_cw[1],rot_cw[2],rot_cw[3],ts),)
     print("Done")
 
+    output = os.path.join(dest_fn, "landmarks.csv");
+    key_frames = data["landmarks"]
+    print("keyframes has {} frames.".format(len(key_frames)))
+    key_frame = {int(k): v for k, v in key_frames.items()}
+
+    with open(output, "w") as f:
+        f.write("1st_keyfrm,n_fnd,n_vis,pos_x,pos_y,pos_z,ref_keyfrm\n")
+        for key in sorted(key_frame.keys()):
+            point = key_frame[key]
+            pos_w = point['pos_w']
+            f.write("{},{},{},{},{},{},{}\n".format(point["1st_keyfrm"],point["n_fnd"],point["n_vis"],pos_w[0],pos_w[1],pos_w[2],point["ref_keyfrm"]))
+
+
+
 if __name__ == "__main__":
     argv = sys.argv
 
