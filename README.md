@@ -26,12 +26,15 @@ this project build on Visual Studio 2019
 │   ├── 0_disp.npy
 │   ├── 1_disp.npy
 │   └── ...
-└── slamData.csv
+├── slamData.csv
+└── landmarks.csv
 ```
 
 ## Output Data
 ```bash
-./[output_dir]/outputMesh.obj
+.
+├── outputMesh.obj
+└── scale.txt
 ```
 
 ## Video to Image Sequence
@@ -45,7 +48,11 @@ python videoToImg.py [input_path].mp4 [output_dir]
 
 Example: python msgToCSV.py.py ./map.msg ./
 
-output: [output_path]/slamData.csv
+output: 
+
+[output_path]/slamData.csv
+
+[output_path]/landmarks.csv
 ```bash
 python map.py [input_path].msg [output_path]
 ```
